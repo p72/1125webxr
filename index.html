@@ -1521,9 +1521,11 @@
                 }, 300);
                 
                 setTimeout(() => {
-                    this.renderer.updateBoard(this.game);
-                    
+                    // Switch player first, then update board to show correct valid moves
                     const switched = this.game.switchPlayer();
+                    
+                    // Update board after switching player to show correct valid moves
+                    this.renderer.updateBoard(this.game);
                     
                     if (!switched && !this.game.gameOver) {
                         this.showTurnIndicator('Pass!');
