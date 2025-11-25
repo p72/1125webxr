@@ -1391,17 +1391,23 @@
                     const vsComBtn = document.getElementById('vs-com-btn');
                     if (vsComBtn) {
                         vsComBtn.addEventListener('click', () => {
+                            console.log('VS COM button clicked');
                             this.difficultySelect.style.display = 'block';
                             this.startGame(true);
                         });
+                    } else {
+                        console.error('vs-com-btn not found');
                     }
                     
                     const vsPlayerBtn = document.getElementById('vs-player-btn');
                     if (vsPlayerBtn) {
                         vsPlayerBtn.addEventListener('click', () => {
+                            console.log('VS Player button clicked');
                             this.difficultySelect.style.display = 'none';
                             this.startGame(false);
                         });
+                    } else {
+                        console.error('vs-player-btn not found');
                     }
                 } catch (error) {
                     console.error('Error setting up UI:', error);
