@@ -9,10 +9,12 @@ WebXR対応の3Dオセロゲームです。Quest2などのVRヘッドセット�
 1. Quest2のブラウザを開く
 2. GitHub PagesのURLにアクセス：
    ```
-   https://[username].github.io/[repo-name]/
+   https://p72.github.io/1125webxr/
    ```
 3. 「Enter VR Mode」ボタンをクリックしてVRモードに入る
 4. ゲームを開始！
+
+**注意**: GitHub Pagesが有効化されている必要があります（下記の設定手順を参照）
 
 ### ゲームモード
 
@@ -23,31 +25,42 @@ WebXR対応の3Dオセロゲームです。Quest2などのVRヘッドセット�
 
 ## 🚀 GitHub Pagesへのデプロイ
 
-### 1. GitHubリポジトリにプッシュ
+### 現在のリポジトリ
+
+- リポジトリ: `https://github.com/p72/1125webxr`
+- GitHub Pages URL: `https://p72.github.io/1125webxr/`
+
+### GitHub Pagesの設定手順
+
+1. GitHubリポジトリのページを開く: `https://github.com/p72/1125webxr`
+2. 上部の **Settings** タブをクリック
+3. 左メニューの **Pages** をクリック
+4. **Source** セクションで：
+   - 「Deploy from a branch」を選択
+   - **Branch** で `main` を選択
+   - **Folder** は `/ (root)` のまま
+5. **Save** をクリック
+
+数分待つと、`https://p72.github.io/1125webxr/` でアクセス可能になります。
+
+### 初回セットアップ（既に完了済み）
 
 ```bash
 git init
 git add .
-git commit -m "Initial commit: WebXR Othello game"
+git commit -m "Setup GitHub Pages for Quest2 deployment"
 git branch -M main
-git remote add origin https://github.com/[username]/[repo-name].git
+git remote add origin https://github.com/p72/1125webxr.git
 git push -u origin main
 ```
-
-### 2. GitHub Pagesの設定
-
-1. GitHubリポジトリのページを開く
-2. **Settings** > **Pages** に移動
-3. **Source** でブランチを選択（通常は `main`）
-4. **Save** をクリック
-
-数分待つと、`https://[username].github.io/[repo-name]/` でアクセス可能になります。
 
 ## 📝 注意事項
 
 - WebXR APIはHTTPS環境でのみ動作します
 - GitHub Pagesは自動でHTTPS証明書を提供するため、追加設定は不要です
 - Quest2のブラウザからHTTPSのURLにアクセスする必要があります
+- GitHub Pagesの設定後、サイトが公開されるまで数分かかる場合があります
+- 初回デプロイ時は最大10分程度かかることもあります
 
 ## 🛠️ 技術スタック
 
