@@ -1,0 +1,1412 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebXR オセロ - VR/AR対応</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --neon-cyan: #00f5ff;
+            --neon-magenta: #ff00ff;
+            --neon-yellow: #ffff00;
+            --dark-bg: #0a0a0f;
+            --glass-bg: rgba(10, 10, 20, 0.85);
+            --grid-color: rgba(0, 245, 255, 0.1);
+        }
+        
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background: var(--dark-bg);
+            color: #fff;
+            overflow: hidden;
+            min-height: 100vh;
+        }
+        
+        /* Cyberpunk grid background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px),
+                linear-gradient(var(--grid-color) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: -1;
+        }
+        
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(ellipse at 50% 0%, rgba(0, 245, 255, 0.15) 0%, transparent 60%);
+            pointer-events: none;
+            z-index: -1;
+        }
+        
+        #ui-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            background: linear-gradient(135deg, rgba(0,0,0,0.9) 0%, rgba(20,0,40,0.95) 100%);
+            transition: opacity 0.5s ease, visibility 0.5s ease;
+        }
+        
+        #ui-overlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+        
+        .title {
+            font-family: 'Orbitron', monospace;
+            font-size: clamp(2.5rem, 8vw, 5rem);
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.3em;
+            margin-bottom: 0.5em;
+            background: linear-gradient(90deg, var(--neon-cyan), var(--neon-magenta), var(--neon-cyan));
+            background-size: 200% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradientShift 3s ease infinite;
+            text-shadow: 0 0 30px rgba(0, 245, 255, 0.5);
+            filter: drop-shadow(0 0 20px rgba(255, 0, 255, 0.3));
+        }
+        
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            color: rgba(255,255,255,0.6);
+            letter-spacing: 0.5em;
+            margin-bottom: 3em;
+            text-transform: uppercase;
+        }
+        
+        .menu-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            width: min(400px, 90vw);
+        }
+        
+        .menu-btn {
+            position: relative;
+            padding: 1.2rem 2rem;
+            font-family: 'Orbitron', monospace;
+            font-size: 1.1rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            color: var(--neon-cyan);
+            background: transparent;
+            border: 2px solid var(--neon-cyan);
+            cursor: pointer;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px));
+        }
+        
+        .menu-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 245, 255, 0.3), transparent);
+            transition: left 0.5s ease;
+        }
+        
+        .menu-btn:hover::before {
+            left: 100%;
+        }
+        
+        .menu-btn:hover {
+            background: rgba(0, 245, 255, 0.1);
+            box-shadow: 0 0 30px rgba(0, 245, 255, 0.5), inset 0 0 30px rgba(0, 245, 255, 0.1);
+            transform: translateX(10px);
+        }
+        
+        .menu-btn.vr-btn {
+            border-color: var(--neon-magenta);
+            color: var(--neon-magenta);
+        }
+        
+        .menu-btn.vr-btn:hover {
+            background: rgba(255, 0, 255, 0.1);
+            box-shadow: 0 0 30px rgba(255, 0, 255, 0.5), inset 0 0 30px rgba(255, 0, 255, 0.1);
+        }
+        
+        .menu-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        
+        /* Game HUD */
+        #game-hud {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 1rem 2rem;
+            display: none;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, transparent 100%);
+            z-index: 50;
+        }
+        
+        #game-hud.active {
+            display: flex;
+        }
+        
+        .player-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.8rem 1.5rem;
+            background: var(--glass-bg);
+            border: 1px solid rgba(0, 245, 255, 0.3);
+            clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+        }
+        
+        .player-info.active {
+            border-color: var(--neon-cyan);
+            box-shadow: 0 0 20px rgba(0, 245, 255, 0.3);
+        }
+        
+        .player-info.white {
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+        
+        .player-info.white.active {
+            border-color: #fff;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+        }
+        
+        .disc-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            box-shadow: 0 0 10px currentColor;
+        }
+        
+        .disc-icon.black {
+            background: radial-gradient(circle at 30% 30%, #444, #000);
+            border: 2px solid var(--neon-cyan);
+        }
+        
+        .disc-icon.white {
+            background: radial-gradient(circle at 30% 30%, #fff, #ccc);
+            border: 2px solid #fff;
+        }
+        
+        .player-name {
+            font-family: 'Orbitron', monospace;
+            font-size: 0.9rem;
+            letter-spacing: 0.1em;
+        }
+        
+        .score {
+            font-family: 'Orbitron', monospace;
+            font-size: 1.8rem;
+            font-weight: 900;
+            color: var(--neon-cyan);
+        }
+        
+        .player-info.white .score {
+            color: #fff;
+        }
+        
+        .turn-indicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Orbitron', monospace;
+            font-size: 1.5rem;
+            padding: 1rem 2rem;
+            background: var(--glass-bg);
+            border: 2px solid var(--neon-magenta);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 60;
+            pointer-events: none;
+        }
+        
+        .turn-indicator.show {
+            opacity: 1;
+            animation: pulse 0.5s ease;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.1); }
+        }
+        
+        /* Result screen */
+        #result-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 200;
+        }
+        
+        #result-screen.active {
+            display: flex;
+        }
+        
+        .result-title {
+            font-family: 'Orbitron', monospace;
+            font-size: clamp(2rem, 6vw, 4rem);
+            font-weight: 900;
+            margin-bottom: 1rem;
+        }
+        
+        .result-title.black-wins {
+            color: var(--neon-cyan);
+            text-shadow: 0 0 30px var(--neon-cyan);
+        }
+        
+        .result-title.white-wins {
+            color: #fff;
+            text-shadow: 0 0 30px #fff;
+        }
+        
+        .result-title.draw {
+            color: var(--neon-yellow);
+            text-shadow: 0 0 30px var(--neon-yellow);
+        }
+        
+        .result-score {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 2rem;
+            margin-bottom: 3rem;
+            color: rgba(255,255,255,0.7);
+        }
+        
+        /* Canvas */
+        #game-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Back button */
+        #back-btn {
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            padding: 0.5rem 1rem;
+            font-family: 'Orbitron', monospace;
+            font-size: 0.8rem;
+            color: var(--neon-cyan);
+            background: transparent;
+            border: 1px solid var(--neon-cyan);
+            cursor: pointer;
+            z-index: 100;
+            display: none;
+            transition: all 0.3s ease;
+        }
+        
+        #back-btn:hover {
+            background: rgba(0, 245, 255, 0.2);
+        }
+        
+        #back-btn.active {
+            display: block;
+        }
+        
+        /* Difficulty selector */
+        .difficulty-select {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: var(--glass-bg);
+            border: 1px solid rgba(0, 245, 255, 0.3);
+        }
+        
+        .difficulty-label {
+            font-family: 'Orbitron', monospace;
+            font-size: 0.8rem;
+            color: rgba(255,255,255,0.6);
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+        
+        .difficulty-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .diff-btn {
+            flex: 1;
+            padding: 0.5rem;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: rgba(255,255,255,0.5);
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.2);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .diff-btn.active {
+            color: var(--neon-cyan);
+            border-color: var(--neon-cyan);
+            background: rgba(0, 245, 255, 0.1);
+        }
+        
+        .diff-btn:hover:not(.active) {
+            border-color: rgba(255,255,255,0.5);
+            color: rgba(255,255,255,0.8);
+        }
+        
+        /* Loading */
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Orbitron', monospace;
+            color: var(--neon-cyan);
+            z-index: 300;
+            display: none;
+        }
+        
+        .loading.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="game-canvas"></canvas>
+    
+    <div id="ui-overlay">
+        <h1 class="title">Othello</h1>
+        <p class="subtitle">WebXR Edition</p>
+        
+        <div class="menu-container">
+            <button class="menu-btn" id="vs-com-btn">VS COM</button>
+            <button class="menu-btn" id="vs-player-btn">VS Player</button>
+            <button class="menu-btn vr-btn" id="vr-btn" disabled>Enter VR Mode</button>
+            <button class="menu-btn vr-btn" id="ar-btn" disabled>Enter AR Mode</button>
+        </div>
+        
+        <div class="difficulty-select" id="difficulty-select" style="display: none;">
+            <span class="difficulty-label">COM Difficulty</span>
+            <div class="difficulty-buttons">
+                <button class="diff-btn" data-level="1">Easy</button>
+                <button class="diff-btn active" data-level="2">Normal</button>
+                <button class="diff-btn" data-level="3">Hard</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="game-hud">
+        <div class="player-info black" id="black-info">
+            <div class="disc-icon black"></div>
+            <span class="player-name" id="black-name">BLACK</span>
+            <span class="score" id="black-score">2</span>
+        </div>
+        <div class="player-info white" id="white-info">
+            <div class="disc-icon white"></div>
+            <span class="player-name" id="white-name">WHITE</span>
+            <span class="score" id="white-score">2</span>
+        </div>
+    </div>
+    
+    <div class="turn-indicator" id="turn-indicator"></div>
+    
+    <div id="result-screen">
+        <h2 class="result-title" id="result-title">BLACK WINS!</h2>
+        <p class="result-score" id="result-score">32 - 32</p>
+        <button class="menu-btn" id="restart-btn">Play Again</button>
+        <button class="menu-btn" id="menu-btn" style="margin-top: 1rem;">Back to Menu</button>
+    </div>
+    
+    <button id="back-btn">← MENU</button>
+    
+    <div class="loading" id="loading">Loading...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // ========================================
+        // OTHELLO GAME LOGIC
+        // ========================================
+        class OthelloGame {
+            constructor() {
+                this.board = [];
+                this.currentPlayer = 1; // 1 = black, 2 = white
+                this.gameOver = false;
+                this.vsComputer = false;
+                this.computerLevel = 2;
+                this.reset();
+            }
+            
+            reset() {
+                this.board = Array(8).fill(null).map(() => Array(8).fill(0));
+                // Initial setup
+                this.board[3][3] = 2; // white
+                this.board[3][4] = 1; // black
+                this.board[4][3] = 1; // black
+                this.board[4][4] = 2; // white
+                this.currentPlayer = 1;
+                this.gameOver = false;
+            }
+            
+            getValidMoves(player) {
+                const moves = [];
+                for (let row = 0; row < 8; row++) {
+                    for (let col = 0; col < 8; col++) {
+                        if (this.isValidMove(row, col, player)) {
+                            moves.push({ row, col });
+                        }
+                    }
+                }
+                return moves;
+            }
+            
+            isValidMove(row, col, player) {
+                if (this.board[row][col] !== 0) return false;
+                
+                const opponent = player === 1 ? 2 : 1;
+                const directions = [
+                    [-1, -1], [-1, 0], [-1, 1],
+                    [0, -1],          [0, 1],
+                    [1, -1],  [1, 0], [1, 1]
+                ];
+                
+                for (const [dr, dc] of directions) {
+                    let r = row + dr;
+                    let c = col + dc;
+                    let foundOpponent = false;
+                    
+                    while (r >= 0 && r < 8 && c >= 0 && c < 8) {
+                        if (this.board[r][c] === opponent) {
+                            foundOpponent = true;
+                        } else if (this.board[r][c] === player && foundOpponent) {
+                            return true;
+                        } else {
+                            break;
+                        }
+                        r += dr;
+                        c += dc;
+                    }
+                }
+                return false;
+            }
+            
+            makeMove(row, col, player) {
+                if (!this.isValidMove(row, col, player)) return [];
+                
+                this.board[row][col] = player;
+                const flipped = [];
+                const opponent = player === 1 ? 2 : 1;
+                const directions = [
+                    [-1, -1], [-1, 0], [-1, 1],
+                    [0, -1],          [0, 1],
+                    [1, -1],  [1, 0], [1, 1]
+                ];
+                
+                for (const [dr, dc] of directions) {
+                    const toFlip = [];
+                    let r = row + dr;
+                    let c = col + dc;
+                    
+                    while (r >= 0 && r < 8 && c >= 0 && c < 8 && this.board[r][c] === opponent) {
+                        toFlip.push({ row: r, col: c });
+                        r += dr;
+                        c += dc;
+                    }
+                    
+                    if (r >= 0 && r < 8 && c >= 0 && c < 8 && this.board[r][c] === player && toFlip.length > 0) {
+                        for (const pos of toFlip) {
+                            this.board[pos.row][pos.col] = player;
+                            flipped.push(pos);
+                        }
+                    }
+                }
+                
+                return flipped;
+            }
+            
+            switchPlayer() {
+                const nextPlayer = this.currentPlayer === 1 ? 2 : 1;
+                const validMoves = this.getValidMoves(nextPlayer);
+                
+                if (validMoves.length > 0) {
+                    this.currentPlayer = nextPlayer;
+                    return true;
+                } else {
+                    // Check if current player can still move
+                    const currentMoves = this.getValidMoves(this.currentPlayer);
+                    if (currentMoves.length === 0) {
+                        this.gameOver = true;
+                    }
+                    return false;
+                }
+            }
+            
+            getScore() {
+                let black = 0, white = 0;
+                for (let row = 0; row < 8; row++) {
+                    for (let col = 0; col < 8; col++) {
+                        if (this.board[row][col] === 1) black++;
+                        else if (this.board[row][col] === 2) white++;
+                    }
+                }
+                return { black, white };
+            }
+            
+            // COM AI
+            getComputerMove() {
+                const moves = this.getValidMoves(this.currentPlayer);
+                if (moves.length === 0) return null;
+                
+                if (this.computerLevel === 1) {
+                    // Easy: Random
+                    return moves[Math.floor(Math.random() * moves.length)];
+                } else if (this.computerLevel === 2) {
+                    // Normal: Greedy + Corner preference
+                    return this.getGreedyMove(moves);
+                } else {
+                    // Hard: Minimax
+                    return this.getMinimaxMove(moves, 4);
+                }
+            }
+            
+            getGreedyMove(moves) {
+                const corners = [[0,0], [0,7], [7,0], [7,7]];
+                
+                // Check for corners first
+                for (const move of moves) {
+                    if (corners.some(c => c[0] === move.row && c[1] === move.col)) {
+                        return move;
+                    }
+                }
+                
+                // Avoid cells next to corners if corner is empty
+                const badCells = [];
+                for (const [cr, cc] of corners) {
+                    if (this.board[cr][cc] === 0) {
+                        if (cr === 0 && cc === 0) badCells.push([0,1], [1,0], [1,1]);
+                        if (cr === 0 && cc === 7) badCells.push([0,6], [1,6], [1,7]);
+                        if (cr === 7 && cc === 0) badCells.push([6,0], [6,1], [7,1]);
+                        if (cr === 7 && cc === 7) badCells.push([6,6], [6,7], [7,6]);
+                    }
+                }
+                
+                const safeMoves = moves.filter(m => 
+                    !badCells.some(b => b[0] === m.row && b[1] === m.col)
+                );
+                
+                const movesToEvaluate = safeMoves.length > 0 ? safeMoves : moves;
+                
+                // Pick move that flips most pieces
+                let bestMove = movesToEvaluate[0];
+                let bestScore = 0;
+                
+                for (const move of movesToEvaluate) {
+                    const testBoard = this.board.map(r => [...r]);
+                    const flipped = this.countFlips(move.row, move.col, this.currentPlayer);
+                    if (flipped > bestScore) {
+                        bestScore = flipped;
+                        bestMove = move;
+                    }
+                }
+                
+                return bestMove;
+            }
+            
+            countFlips(row, col, player) {
+                let count = 0;
+                const opponent = player === 1 ? 2 : 1;
+                const directions = [
+                    [-1, -1], [-1, 0], [-1, 1],
+                    [0, -1],          [0, 1],
+                    [1, -1],  [1, 0], [1, 1]
+                ];
+                
+                for (const [dr, dc] of directions) {
+                    let toFlip = 0;
+                    let r = row + dr;
+                    let c = col + dc;
+                    
+                    while (r >= 0 && r < 8 && c >= 0 && c < 8 && this.board[r][c] === opponent) {
+                        toFlip++;
+                        r += dr;
+                        c += dc;
+                    }
+                    
+                    if (r >= 0 && r < 8 && c >= 0 && c < 8 && this.board[r][c] === player) {
+                        count += toFlip;
+                    }
+                }
+                
+                return count;
+            }
+            
+            getMinimaxMove(moves, depth) {
+                let bestMove = moves[0];
+                let bestScore = -Infinity;
+                
+                for (const move of moves) {
+                    const boardCopy = this.board.map(r => [...r]);
+                    const playerCopy = this.currentPlayer;
+                    
+                    this.makeMove(move.row, move.col, this.currentPlayer);
+                    const score = this.minimax(depth - 1, false, -Infinity, Infinity);
+                    
+                    this.board = boardCopy;
+                    this.currentPlayer = playerCopy;
+                    
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestMove = move;
+                    }
+                }
+                
+                return bestMove;
+            }
+            
+            minimax(depth, isMaximizing, alpha, beta) {
+                if (depth === 0) {
+                    return this.evaluateBoard();
+                }
+                
+                const player = isMaximizing ? 2 : 1; // COM is white (2)
+                const moves = this.getValidMoves(player);
+                
+                if (moves.length === 0) {
+                    const oppMoves = this.getValidMoves(player === 1 ? 2 : 1);
+                    if (oppMoves.length === 0) {
+                        return this.evaluateBoard() * 100;
+                    }
+                    return this.minimax(depth - 1, !isMaximizing, alpha, beta);
+                }
+                
+                if (isMaximizing) {
+                    let maxScore = -Infinity;
+                    for (const move of moves) {
+                        const boardCopy = this.board.map(r => [...r]);
+                        this.makeMove(move.row, move.col, player);
+                        const score = this.minimax(depth - 1, false, alpha, beta);
+                        this.board = boardCopy;
+                        maxScore = Math.max(maxScore, score);
+                        alpha = Math.max(alpha, score);
+                        if (beta <= alpha) break;
+                    }
+                    return maxScore;
+                } else {
+                    let minScore = Infinity;
+                    for (const move of moves) {
+                        const boardCopy = this.board.map(r => [...r]);
+                        this.makeMove(move.row, move.col, player);
+                        const score = this.minimax(depth - 1, true, alpha, beta);
+                        this.board = boardCopy;
+                        minScore = Math.min(minScore, score);
+                        beta = Math.min(beta, score);
+                        if (beta <= alpha) break;
+                    }
+                    return minScore;
+                }
+            }
+            
+            evaluateBoard() {
+                const weights = [
+                    [100, -20, 10, 5, 5, 10, -20, 100],
+                    [-20, -50, -2, -2, -2, -2, -50, -20],
+                    [10, -2, -1, -1, -1, -1, -2, 10],
+                    [5, -2, -1, -1, -1, -1, -2, 5],
+                    [5, -2, -1, -1, -1, -1, -2, 5],
+                    [10, -2, -1, -1, -1, -1, -2, 10],
+                    [-20, -50, -2, -2, -2, -2, -50, -20],
+                    [100, -20, 10, 5, 5, 10, -20, 100]
+                ];
+                
+                let score = 0;
+                for (let r = 0; r < 8; r++) {
+                    for (let c = 0; c < 8; c++) {
+                        if (this.board[r][c] === 2) score += weights[r][c];
+                        else if (this.board[r][c] === 1) score -= weights[r][c];
+                    }
+                }
+                return score;
+            }
+        }
+
+        // ========================================
+        // THREE.JS 3D RENDERER
+        // ========================================
+        class OthelloRenderer {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.scene = new THREE.Scene();
+                this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.xr.enabled = true;
+                
+                this.discs = [];
+                this.validMoveMarkers = [];
+                this.raycaster = new THREE.Raycaster();
+                this.mouse = new THREE.Vector2();
+                this.selectedCell = null;
+                this.isXRSession = false;
+                
+                this.setupScene();
+                this.setupLights();
+                this.createBoard();
+                this.setupEventListeners();
+                
+                window.addEventListener('resize', () => this.onResize());
+            }
+            
+            setupScene() {
+                this.scene.background = new THREE.Color(0x0a0a0f);
+                this.scene.fog = new THREE.Fog(0x0a0a0f, 10, 50);
+                
+                // Camera position for desktop view
+                this.camera.position.set(0, 8, 8);
+                this.camera.lookAt(0, 0, 0);
+                
+                // Add grid helper for atmosphere
+                const gridHelper = new THREE.GridHelper(20, 20, 0x00f5ff, 0x00f5ff);
+                gridHelper.material.opacity = 0.1;
+                gridHelper.material.transparent = true;
+                gridHelper.position.y = -0.6;
+                this.scene.add(gridHelper);
+            }
+            
+            setupLights() {
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+                this.scene.add(ambientLight);
+                
+                const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                mainLight.position.set(5, 10, 5);
+                mainLight.castShadow = true;
+                this.scene.add(mainLight);
+                
+                const cyanLight = new THREE.PointLight(0x00f5ff, 0.5, 20);
+                cyanLight.position.set(-5, 5, -5);
+                this.scene.add(cyanLight);
+                
+                const magentaLight = new THREE.PointLight(0xff00ff, 0.3, 20);
+                magentaLight.position.set(5, 5, 5);
+                this.scene.add(magentaLight);
+            }
+            
+            createBoard() {
+                // Board base
+                const boardGeometry = new THREE.BoxGeometry(8.5, 0.3, 8.5);
+                const boardMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x1a3a1a,
+                    metalness: 0.3,
+                    roughness: 0.7
+                });
+                this.boardMesh = new THREE.Mesh(boardGeometry, boardMaterial);
+                this.boardMesh.position.y = -0.15;
+                this.scene.add(this.boardMesh);
+                
+                // Board frame
+                const frameGeometry = new THREE.BoxGeometry(9, 0.4, 9);
+                const frameMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x2a1a0a,
+                    metalness: 0.5,
+                    roughness: 0.5
+                });
+                const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+                frame.position.y = -0.2;
+                this.scene.add(frame);
+                
+                // Grid lines
+                const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+                
+                for (let i = 0; i <= 8; i++) {
+                    const offset = i - 4;
+                    
+                    // Horizontal lines
+                    const hPoints = [
+                        new THREE.Vector3(-4, 0.01, offset),
+                        new THREE.Vector3(4, 0.01, offset)
+                    ];
+                    const hGeometry = new THREE.BufferGeometry().setFromPoints(hPoints);
+                    const hLine = new THREE.Line(hGeometry, lineMaterial);
+                    this.scene.add(hLine);
+                    
+                    // Vertical lines
+                    const vPoints = [
+                        new THREE.Vector3(offset, 0.01, -4),
+                        new THREE.Vector3(offset, 0.01, 4)
+                    ];
+                    const vGeometry = new THREE.BufferGeometry().setFromPoints(vPoints);
+                    const vLine = new THREE.Line(vGeometry, lineMaterial);
+                    this.scene.add(vLine);
+                }
+                
+                // Cell meshes for raycasting
+                this.cellMeshes = [];
+                const cellGeometry = new THREE.PlaneGeometry(0.95, 0.95);
+                const cellMaterial = new THREE.MeshBasicMaterial({
+                    transparent: true,
+                    opacity: 0,
+                    side: THREE.DoubleSide
+                });
+                
+                for (let row = 0; row < 8; row++) {
+                    for (let col = 0; col < 8; col++) {
+                        const cell = new THREE.Mesh(cellGeometry, cellMaterial.clone());
+                        cell.rotation.x = -Math.PI / 2;
+                        cell.position.set(col - 3.5, 0.02, row - 3.5);
+                        cell.userData = { row, col };
+                        this.cellMeshes.push(cell);
+                        this.scene.add(cell);
+                    }
+                }
+            }
+            
+            updateBoard(game) {
+                // Remove old discs
+                for (const disc of this.discs) {
+                    this.scene.remove(disc);
+                }
+                this.discs = [];
+                
+                // Remove valid move markers
+                for (const marker of this.validMoveMarkers) {
+                    this.scene.remove(marker);
+                }
+                this.validMoveMarkers = [];
+                
+                // Add discs
+                for (let row = 0; row < 8; row++) {
+                    for (let col = 0; col < 8; col++) {
+                        const cell = game.board[row][col];
+                        if (cell !== 0) {
+                            const disc = this.createDisc(cell === 1);
+                            disc.position.set(col - 3.5, 0.1, row - 3.5);
+                            this.discs.push(disc);
+                            this.scene.add(disc);
+                        }
+                    }
+                }
+                
+                // Show valid moves
+                if (!game.gameOver) {
+                    const validMoves = game.getValidMoves(game.currentPlayer);
+                    for (const move of validMoves) {
+                        const marker = this.createValidMoveMarker(game.currentPlayer === 1);
+                        marker.position.set(move.col - 3.5, 0.02, move.row - 3.5);
+                        this.validMoveMarkers.push(marker);
+                        this.scene.add(marker);
+                    }
+                }
+            }
+            
+            createDisc(isBlack) {
+                const geometry = new THREE.CylinderGeometry(0.4, 0.4, 0.1, 32);
+                const material = new THREE.MeshStandardMaterial({
+                    color: isBlack ? 0x111111 : 0xeeeeee,
+                    metalness: 0.3,
+                    roughness: 0.4,
+                    emissive: isBlack ? 0x001a1a : 0x1a1a1a,
+                    emissiveIntensity: 0.2
+                });
+                
+                const disc = new THREE.Mesh(geometry, material);
+                
+                // Add glow ring
+                const ringGeometry = new THREE.RingGeometry(0.38, 0.42, 32);
+                const ringMaterial = new THREE.MeshBasicMaterial({
+                    color: isBlack ? 0x00f5ff : 0xffffff,
+                    transparent: true,
+                    opacity: 0.5,
+                    side: THREE.DoubleSide
+                });
+                const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+                ring.rotation.x = -Math.PI / 2;
+                ring.position.y = 0.06;
+                disc.add(ring);
+                
+                return disc;
+            }
+            
+            createValidMoveMarker(isBlack) {
+                const geometry = new THREE.RingGeometry(0.2, 0.3, 32);
+                const material = new THREE.MeshBasicMaterial({
+                    color: isBlack ? 0x00f5ff : 0xffffff,
+                    transparent: true,
+                    opacity: 0.4,
+                    side: THREE.DoubleSide
+                });
+                const marker = new THREE.Mesh(geometry, material);
+                marker.rotation.x = -Math.PI / 2;
+                return marker;
+            }
+            
+            animateDiscPlacement(row, col, isBlack) {
+                const disc = this.createDisc(isBlack);
+                disc.position.set(col - 3.5, 2, row - 3.5);
+                disc.scale.set(0.1, 0.1, 0.1);
+                this.scene.add(disc);
+                this.discs.push(disc);
+                
+                // Animate drop
+                const startY = 2;
+                const endY = 0.1;
+                const startTime = performance.now();
+                const duration = 300;
+                
+                const animate = () => {
+                    const elapsed = performance.now() - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const eased = 1 - Math.pow(1 - progress, 3);
+                    
+                    disc.position.y = startY + (endY - startY) * eased;
+                    disc.scale.setScalar(0.1 + 0.9 * eased);
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    }
+                };
+                animate();
+            }
+            
+            animateFlip(flippedCells, isBlack) {
+                for (let i = 0; i < flippedCells.length; i++) {
+                    const cell = flippedCells[i];
+                    setTimeout(() => {
+                        this.flipDisc(cell.row, cell.col, isBlack);
+                    }, i * 50);
+                }
+            }
+            
+            flipDisc(row, col, toBlack) {
+                const x = col - 3.5;
+                const z = row - 3.5;
+                
+                // Find existing disc
+                const existingDisc = this.discs.find(d => 
+                    Math.abs(d.position.x - x) < 0.1 && 
+                    Math.abs(d.position.z - z) < 0.1
+                );
+                
+                if (existingDisc) {
+                    const startTime = performance.now();
+                    const duration = 200;
+                    
+                    const animate = () => {
+                        const elapsed = performance.now() - startTime;
+                        const progress = Math.min(elapsed / duration, 1);
+                        
+                        if (progress < 0.5) {
+                            existingDisc.rotation.x = progress * Math.PI;
+                            existingDisc.position.y = 0.1 + Math.sin(progress * Math.PI) * 0.3;
+                        } else {
+                            // Replace disc
+                            if (existingDisc.userData.flipped !== true) {
+                                existingDisc.userData.flipped = true;
+                                this.scene.remove(existingDisc);
+                                const index = this.discs.indexOf(existingDisc);
+                                if (index > -1) this.discs.splice(index, 1);
+                                
+                                const newDisc = this.createDisc(toBlack);
+                                newDisc.position.set(x, 0.1 + Math.sin(progress * Math.PI) * 0.3, z);
+                                newDisc.rotation.x = (progress - 0.5) * Math.PI;
+                                this.scene.add(newDisc);
+                                this.discs.push(newDisc);
+                            }
+                        }
+                        
+                        if (progress < 1) {
+                            requestAnimationFrame(animate);
+                        }
+                    };
+                    animate();
+                }
+            }
+            
+            getCellFromClick(event) {
+                const rect = this.canvas.getBoundingClientRect();
+                this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+                
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+                const intersects = this.raycaster.intersectObjects(this.cellMeshes);
+                
+                if (intersects.length > 0) {
+                    return intersects[0].object.userData;
+                }
+                return null;
+            }
+            
+            setupEventListeners() {
+                // Click handling is done in main app
+            }
+            
+            onResize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+            
+            render() {
+                this.renderer.render(this.scene, this.camera);
+            }
+            
+            animate() {
+                this.renderer.setAnimationLoop(() => {
+                    // Rotate valid move markers
+                    for (const marker of this.validMoveMarkers) {
+                        marker.rotation.z += 0.02;
+                    }
+                    this.render();
+                });
+            }
+            
+            // WebXR Support
+            async checkXRSupport() {
+                const result = { vr: false, ar: false };
+                
+                if ('xr' in navigator) {
+                    try {
+                        result.vr = await navigator.xr.isSessionSupported('immersive-vr');
+                    } catch (e) {
+                        console.log('VR not supported');
+                    }
+                    
+                    try {
+                        result.ar = await navigator.xr.isSessionSupported('immersive-ar');
+                    } catch (e) {
+                        console.log('AR not supported');
+                    }
+                }
+                
+                return result;
+            }
+            
+            async startVRSession() {
+                if (!('xr' in navigator)) return false;
+                
+                try {
+                    const session = await navigator.xr.requestSession('immersive-vr', {
+                        optionalFeatures: ['local-floor', 'bounded-floor']
+                    });
+                    
+                    this.renderer.xr.setSession(session);
+                    this.isXRSession = true;
+                    
+                    // Adjust camera for VR
+                    this.camera.position.set(0, 1.6, 2);
+                    
+                    session.addEventListener('end', () => {
+                        this.isXRSession = false;
+                        this.camera.position.set(0, 8, 8);
+                        this.camera.lookAt(0, 0, 0);
+                    });
+                    
+                    return true;
+                } catch (e) {
+                    console.error('Failed to start VR session:', e);
+                    return false;
+                }
+            }
+            
+            async startARSession() {
+                if (!('xr' in navigator)) return false;
+                
+                try {
+                    const session = await navigator.xr.requestSession('immersive-ar', {
+                        optionalFeatures: ['local-floor', 'hit-test']
+                    });
+                    
+                    this.renderer.xr.setSession(session);
+                    this.isXRSession = true;
+                    this.scene.background = null;
+                    
+                    session.addEventListener('end', () => {
+                        this.isXRSession = false;
+                        this.scene.background = new THREE.Color(0x0a0a0f);
+                        this.camera.position.set(0, 8, 8);
+                        this.camera.lookAt(0, 0, 0);
+                    });
+                    
+                    return true;
+                } catch (e) {
+                    console.error('Failed to start AR session:', e);
+                    return false;
+                }
+            }
+        }
+
+        // ========================================
+        // MAIN APP
+        // ========================================
+        class OthelloApp {
+            constructor() {
+                this.game = new OthelloGame();
+                this.renderer = new OthelloRenderer(document.getElementById('game-canvas'));
+                
+                this.uiOverlay = document.getElementById('ui-overlay');
+                this.gameHud = document.getElementById('game-hud');
+                this.resultScreen = document.getElementById('result-screen');
+                this.backBtn = document.getElementById('back-btn');
+                this.turnIndicator = document.getElementById('turn-indicator');
+                this.difficultySelect = document.getElementById('difficulty-select');
+                
+                this.isPlaying = false;
+                this.isComputerThinking = false;
+                
+                this.setupUI();
+                this.renderer.animate();
+            }
+            
+            async setupUI() {
+                // Check XR support
+                const xrSupport = await this.renderer.checkXRSupport();
+                
+                const vrBtn = document.getElementById('vr-btn');
+                const arBtn = document.getElementById('ar-btn');
+                
+                if (xrSupport.vr) {
+                    vrBtn.disabled = false;
+                    vrBtn.addEventListener('click', () => this.startVR());
+                }
+                
+                if (xrSupport.ar) {
+                    arBtn.disabled = false;
+                    arBtn.addEventListener('click', () => this.startAR());
+                }
+                
+                // Menu buttons
+                document.getElementById('vs-com-btn').addEventListener('click', () => {
+                    this.difficultySelect.style.display = 'block';
+                    this.startGame(true);
+                });
+                
+                document.getElementById('vs-player-btn').addEventListener('click', () => {
+                    this.difficultySelect.style.display = 'none';
+                    this.startGame(false);
+                });
+                
+                // Difficulty buttons
+                const diffBtns = document.querySelectorAll('.diff-btn');
+                diffBtns.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        diffBtns.forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        this.game.computerLevel = parseInt(btn.dataset.level);
+                    });
+                });
+                
+                // Back button
+                this.backBtn.addEventListener('click', () => this.backToMenu());
+                
+                // Result buttons
+                document.getElementById('restart-btn').addEventListener('click', () => this.restartGame());
+                document.getElementById('menu-btn').addEventListener('click', () => this.backToMenu());
+                
+                // Canvas click
+                this.renderer.canvas.addEventListener('click', (e) => this.handleClick(e));
+            }
+            
+            startGame(vsComputer) {
+                this.game.reset();
+                this.game.vsComputer = vsComputer;
+                
+                this.uiOverlay.classList.add('hidden');
+                this.gameHud.classList.add('active');
+                this.backBtn.classList.add('active');
+                this.resultScreen.classList.remove('active');
+                
+                document.getElementById('white-name').textContent = vsComputer ? 'COM' : 'WHITE';
+                
+                this.isPlaying = true;
+                this.renderer.updateBoard(this.game);
+                this.updateHUD();
+            }
+            
+            restartGame() {
+                this.startGame(this.game.vsComputer);
+            }
+            
+            backToMenu() {
+                this.isPlaying = false;
+                this.uiOverlay.classList.remove('hidden');
+                this.gameHud.classList.remove('active');
+                this.backBtn.classList.remove('active');
+                this.resultScreen.classList.remove('active');
+                
+                this.game.reset();
+                this.renderer.updateBoard(this.game);
+            }
+            
+            async startVR() {
+                if (await this.renderer.startVRSession()) {
+                    this.startGame(true);
+                }
+            }
+            
+            async startAR() {
+                if (await this.renderer.startARSession()) {
+                    this.startGame(true);
+                }
+            }
+            
+            handleClick(event) {
+                if (!this.isPlaying || this.game.gameOver || this.isComputerThinking) return;
+                
+                // If it's computer's turn, don't allow clicks
+                if (this.game.vsComputer && this.game.currentPlayer === 2) return;
+                
+                const cell = this.renderer.getCellFromClick(event);
+                if (!cell) return;
+                
+                if (this.game.isValidMove(cell.row, cell.col, this.game.currentPlayer)) {
+                    this.makeMove(cell.row, cell.col);
+                }
+            }
+            
+            async makeMove(row, col) {
+                const isBlack = this.game.currentPlayer === 1;
+                const flipped = this.game.makeMove(row, col, this.game.currentPlayer);
+                
+                this.renderer.animateDiscPlacement(row, col, isBlack);
+                
+                setTimeout(() => {
+                    this.renderer.animateFlip(flipped, isBlack);
+                }, 300);
+                
+                setTimeout(() => {
+                    this.renderer.updateBoard(this.game);
+                    
+                    const switched = this.game.switchPlayer();
+                    
+                    if (!switched && !this.game.gameOver) {
+                        this.showTurnIndicator('Pass!');
+                    }
+                    
+                    if (this.game.gameOver) {
+                        this.endGame();
+                    } else {
+                        this.updateHUD();
+                        
+                        // Computer's turn
+                        if (this.game.vsComputer && this.game.currentPlayer === 2) {
+                            this.computerMove();
+                        }
+                    }
+                }, 300 + flipped.length * 50 + 200);
+            }
+            
+            async computerMove() {
+                this.isComputerThinking = true;
+                this.showTurnIndicator('Thinking...');
+                
+                await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 500));
+                
+                const move = this.game.getComputerMove();
+                
+                this.turnIndicator.classList.remove('show');
+                
+                if (move) {
+                    this.isComputerThinking = false;
+                    this.makeMove(move.row, move.col);
+                } else {
+                    this.isComputerThinking = false;
+                    const switched = this.game.switchPlayer();
+                    if (this.game.gameOver) {
+                        this.endGame();
+                    } else {
+                        this.showTurnIndicator('COM Pass!');
+                        this.updateHUD();
+                        this.renderer.updateBoard(this.game);
+                    }
+                }
+            }
+            
+            updateHUD() {
+                const score = this.game.getScore();
+                document.getElementById('black-score').textContent = score.black;
+                document.getElementById('white-score').textContent = score.white;
+                
+                document.getElementById('black-info').classList.toggle('active', this.game.currentPlayer === 1);
+                document.getElementById('white-info').classList.toggle('active', this.game.currentPlayer === 2);
+            }
+            
+            showTurnIndicator(text) {
+                this.turnIndicator.textContent = text;
+                this.turnIndicator.classList.add('show');
+                
+                setTimeout(() => {
+                    this.turnIndicator.classList.remove('show');
+                }, 1500);
+            }
+            
+            endGame() {
+                const score = this.game.getScore();
+                const resultTitle = document.getElementById('result-title');
+                const resultScore = document.getElementById('result-score');
+                
+                resultScore.textContent = `${score.black} - ${score.white}`;
+                
+                if (score.black > score.white) {
+                    resultTitle.textContent = 'BLACK WINS!';
+                    resultTitle.className = 'result-title black-wins';
+                } else if (score.white > score.black) {
+                    resultTitle.textContent = this.game.vsComputer ? 'COM WINS!' : 'WHITE WINS!';
+                    resultTitle.className = 'result-title white-wins';
+                } else {
+                    resultTitle.textContent = 'DRAW!';
+                    resultTitle.className = 'result-title draw';
+                }
+                
+                setTimeout(() => {
+                    this.resultScreen.classList.add('active');
+                }, 500);
+            }
+        }
+
+        // Initialize app
+        const app = new OthelloApp();
+    </script>
+</body>
+</html>
