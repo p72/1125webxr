@@ -916,13 +916,13 @@
             updateBoard(game) {
                 // Remove old discs
                 for (const disc of this.discs) {
-                    this.scene.remove(disc);
+                    this.boardGroup.remove(disc);
                 }
                 this.discs = [];
                 
                 // Remove valid move markers
                 for (const marker of this.validMoveMarkers) {
-                    this.scene.remove(marker);
+                    this.boardGroup.remove(marker);
                 }
                 this.validMoveMarkers = [];
                 
@@ -1053,7 +1053,7 @@
                             // Replace disc
                             if (existingDisc.userData.flipped !== true) {
                                 existingDisc.userData.flipped = true;
-                                this.scene.remove(existingDisc);
+                                this.boardGroup.remove(existingDisc);
                                 const index = this.discs.indexOf(existingDisc);
                                 if (index > -1) this.discs.splice(index, 1);
                                 
