@@ -941,7 +941,16 @@
                 
                 // Show valid moves
                 if (!game.gameOver) {
+                    // Debug: Log current player
+                    console.log('updateBoard: currentPlayer =', game.currentPlayer, '(1=black, 2=white)');
                     const validMoves = game.getValidMoves(game.currentPlayer);
+                    console.log('updateBoard: validMoves for player', game.currentPlayer, '=', validMoves.length);
+                    
+                    // Also check what moves the other player has
+                    const otherPlayer = game.currentPlayer === 1 ? 2 : 1;
+                    const otherPlayerMoves = game.getValidMoves(otherPlayer);
+                    console.log('updateBoard: validMoves for other player', otherPlayer, '=', otherPlayerMoves.length);
+                    
                     for (const move of validMoves) {
                         // currentPlayer === 1 is black, so isBlack should be true
                         const isBlack = game.currentPlayer === 1;
