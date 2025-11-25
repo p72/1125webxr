@@ -1180,7 +1180,13 @@
                     
                     // Handle trigger button
                     controller.addEventListener('selectstart', () => {
+                        console.log('selectstart event fired on controller', i);
                         this.onControllerSelect(i);
+                    });
+                    
+                    // Also listen for selectend for debugging
+                    controller.addEventListener('selectend', () => {
+                        console.log('selectend event fired on controller', i);
                     });
                     
                     // Handle grip button for board scale reset
@@ -1208,10 +1214,18 @@
             }
             
             onControllerSelect(controllerIndex) {
-                if (!this.isXRSession) return;
+                if (!this.isXRSession) {
+                    console.log('onControllerSelect: Not in VR session');
+                    return;
+                }
+                
+                console.log('onControllerSelect: Trigger pressed on controller', controllerIndex);
                 
                 const controller = this.controllers[controllerIndex];
-                if (!controller) return;
+                if (!controller) {
+                    console.log('onControllerSelect: Controller not found');
+                    return;
+                }
                 
                 // Get controller position and direction
                 const controllerWorldPosition = new THREE.Vector3();
@@ -1219,16 +1233,32 @@
                 controller.getWorldPosition(controllerWorldPosition);
                 controller.getWorldDirection(controllerWorldDirection);
                 
+                console.log('onControllerSelect: Controller position', controllerWorldPosition);
+                console.log('onControllerSelect: Controller direction', controllerWorldDirection);
+                
                 // Raycast from controller
+                // Note: cellMeshes are children of boardGroup, so raycasting should work correctly
                 this.raycaster.set(controllerWorldPosition, controllerWorldDirection);
-                const intersects = this.raycaster.intersectObjects(this.cellMeshes);
+                const intersects = this.raycaster.intersectObjects(this.cellMeshes, true); // true = recursive (check children)
+                
+                console.log('onControllerSelect: Intersects count', intersects.length);
+                if (intersects.length > 0) {
+                    console.log('onControllerSelect: First intersect point', intersects[0].point);
+                    console.log('onControllerSelect: First intersect object', intersects[0].object);
+                }
                 
                 if (intersects.length > 0) {
                     const cell = intersects[0].object.userData;
+                    console.log('onControllerSelect: Cell found', cell);
                     // Trigger move through app
                     if (window.othelloApp) {
+                        console.log('onControllerSelect: Calling handleVRControllerClick');
                         window.othelloApp.handleVRControllerClick(cell);
+                    } else {
+                        console.error('onControllerSelect: window.othelloApp not found');
                     }
+                } else {
+                    console.log('onControllerSelect: No cell intersection found');
                 }
             }
             
@@ -1553,15 +1583,41 @@
             }
             
             handleVRControllerClick(cell) {
-                if (!this.isPlaying || this.game.gameOver || this.isComputerThinking) return;
+                console.log('handleVRControllerClick: Called with cell', cell);
+                
+                if (!this.isPlaying) {
+                    console.log('handleVRControllerClick: Game not playing');
+                    return;
+                }
+                
+                if (this.game.gameOver) {
+                    console.log('handleVRControllerClick: Game over');
+                    return;
+                }
+                
+                if (this.isComputerThinking) {
+                    console.log('handleVRControllerClick: Computer thinking');
+                    return;
+                }
                 
                 // If it's computer's turn, don't allow clicks
-                if (this.game.vsComputer && this.game.currentPlayer === 2) return;
+                if (this.game.vsComputer && this.game.currentPlayer === 2) {
+                    console.log('handleVRControllerClick: Computer turn');
+                    return;
+                }
                 
-                if (!cell) return;
+                if (!cell) {
+                    console.log('handleVRControllerClick: No cell provided');
+                    return;
+                }
+                
+                console.log('handleVRControllerClick: Checking move', cell.row, cell.col, 'for player', this.game.currentPlayer);
                 
                 if (this.game.isValidMove(cell.row, cell.col, this.game.currentPlayer)) {
+                    console.log('handleVRControllerClick: Valid move, making move');
                     this.makeMove(cell.row, cell.col);
+                } else {
+                    console.log('handleVRControllerClick: Invalid move');
                 }
             }
             
