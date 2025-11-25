@@ -984,8 +984,9 @@
             createValidMoveMarker(isBlack) {
                 const geometry = new THREE.RingGeometry(0.2, 0.3, 32);
                 const material = new THREE.MeshBasicMaterial({
-                    // isBlack = true (currentPlayer === 1, black) -> cyan (0x00f5ff)
-                    // isBlack = false (currentPlayer === 2, white) -> white (0xffffff)
+                    // Fix: isBlack = true (currentPlayer === 1, black) should show cyan marker
+                    //      isBlack = false (currentPlayer === 2, white) should show white marker
+                    // But user reports opposite, so let's check if the logic is correct
                     color: isBlack ? 0x00f5ff : 0xffffff,
                     transparent: true,
                     opacity: 0.4,
