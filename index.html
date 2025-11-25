@@ -1362,7 +1362,10 @@
                 this.isPlaying = false;
                 this.isComputerThinking = false;
                 
-                this.setupUI();
+                // Setup UI asynchronously
+                this.setupUI().catch(error => {
+                    console.error('Error in setupUI:', error);
+                });
                 this.renderer.animate();
             }
             
@@ -1596,8 +1599,13 @@
         }
 
         // Initialize app
-        const app = new OthelloApp();
-        window.othelloApp = app; // Make app accessible for VR controller callbacks
+        try {
+            const app = new OthelloApp();
+            window.othelloApp = app; // Make app accessible for VR controller callbacks
+            console.log('OthelloApp initialized successfully');
+        } catch (error) {
+            console.error('Failed to initialize OthelloApp:', error);
+        }
     </script>
 </body>
 </html>
