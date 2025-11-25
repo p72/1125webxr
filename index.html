@@ -792,6 +792,12 @@
                 this.selectedCell = null;
                 this.isXRSession = false;
                 
+                // VR Controllers
+                this.controllers = [];
+                this.controllerGrips = [];
+                this.controllerRays = [];
+                this.controllerCursors = [];
+                
                 this.setupScene();
                 this.setupLights();
                 this.createBoard();
@@ -1082,6 +1088,145 @@
                 // Click handling is done in main app
             }
             
+            setupVRControllers() {
+                // Create controller groups
+                let controllerModelFactory = null;
+                try {
+                    if (THREE.XRControllerModelFactory) {
+                        controllerModelFactory = new THREE.XRControllerModelFactory();
+                    }
+                } catch (e) {
+                    console.log('XRControllerModelFactory not available, using basic controller visualization');
+                }
+                
+                for (let i = 0; i < 2; i++) {
+                    const controller = this.renderer.xr.getController(i);
+                    controller.addEventListener('connected', (event) => {
+                        const controllerGrip = this.renderer.xr.getControllerGrip(i);
+                        if (controllerModelFactory) {
+                            try {
+                                controllerGrip.add(controllerModelFactory.createControllerModel(controllerGrip));
+                            } catch (e) {
+                                console.log('Could not load controller model, using basic visualization');
+                            }
+                        }
+                        this.scene.add(controllerGrip);
+                        this.controllerGrips[i] = controllerGrip;
+                        
+                        // Create ray
+                        const geometry = new THREE.BufferGeometry().setFromPoints([
+                            new THREE.Vector3(0, 0, 0),
+                            new THREE.Vector3(0, 0, -1)
+                        ]);
+                        const material = new THREE.LineBasicMaterial({ color: 0x00f5ff, linewidth: 2 });
+                        const ray = new THREE.Line(geometry, material);
+                        ray.scale.z = 5;
+                        controller.add(ray);
+                        this.controllerRays[i] = ray;
+                        
+                        // Create cursor
+                        const cursorGeometry = new THREE.RingGeometry(0.02, 0.04, 32);
+                        const cursorMaterial = new THREE.MeshBasicMaterial({
+                            color: 0x00f5ff,
+                            side: THREE.DoubleSide
+                        });
+                        const cursor = new THREE.Mesh(cursorGeometry, cursorMaterial);
+                        cursor.position.z = -1;
+                        cursor.visible = false;
+                        controller.add(cursor);
+                        this.controllerCursors[i] = cursor;
+                    });
+                    
+                    controller.addEventListener('disconnected', () => {
+                        if (this.controllerGrips[i]) {
+                            this.scene.remove(this.controllerGrips[i]);
+                            this.controllerGrips[i] = null;
+                        }
+                        if (this.controllerRays[i]) {
+                            controller.remove(this.controllerRays[i]);
+                            this.controllerRays[i] = null;
+                        }
+                        if (this.controllerCursors[i]) {
+                            controller.remove(this.controllerCursors[i]);
+                            this.controllerCursors[i] = null;
+                        }
+                    });
+                    
+                    // Handle trigger button
+                    controller.addEventListener('selectstart', () => {
+                        this.onControllerSelect(i);
+                    });
+                    
+                    this.scene.add(controller);
+                    this.controllers[i] = controller;
+                }
+            }
+            
+            onControllerSelect(controllerIndex) {
+                if (!this.isXRSession) return;
+                
+                const controller = this.controllers[controllerIndex];
+                if (!controller) return;
+                
+                // Get controller position and direction
+                const controllerWorldPosition = new THREE.Vector3();
+                const controllerWorldDirection = new THREE.Vector3();
+                controller.getWorldPosition(controllerWorldPosition);
+                controller.getWorldDirection(controllerWorldDirection);
+                
+                // Raycast from controller
+                this.raycaster.set(controllerWorldPosition, controllerWorldDirection);
+                const intersects = this.raycaster.intersectObjects(this.cellMeshes);
+                
+                if (intersects.length > 0) {
+                    const cell = intersects[0].object.userData;
+                    // Trigger move through app
+                    if (window.othelloApp) {
+                        window.othelloApp.handleVRControllerClick(cell);
+                    }
+                }
+            }
+            
+            updateVRControllers() {
+                if (!this.isXRSession) return;
+                
+                for (let i = 0; i < this.controllers.length; i++) {
+                    const controller = this.controllers[i];
+                    if (!controller) continue;
+                    
+                    const controllerWorldPosition = new THREE.Vector3();
+                    const controllerWorldDirection = new THREE.Vector3();
+                    controller.getWorldPosition(controllerWorldPosition);
+                    controller.getWorldDirection(controllerWorldDirection);
+                    
+                    // Raycast for cursor
+                    this.raycaster.set(controllerWorldPosition, controllerWorldDirection);
+                    const intersects = this.raycaster.intersectObjects(this.cellMeshes);
+                    
+                    const cursor = this.controllerCursors[i];
+                    const ray = this.controllerRays[i];
+                    
+                    if (intersects.length > 0) {
+                        const intersection = intersects[0];
+                        if (cursor) {
+                            cursor.position.copy(intersection.point);
+                            cursor.position.y = intersection.point.y + 0.01;
+                            cursor.visible = true;
+                        }
+                        if (ray) {
+                            ray.scale.z = intersection.distance;
+                        }
+                    } else {
+                        if (cursor) {
+                            cursor.visible = false;
+                        }
+                        if (ray) {
+                            ray.scale.z = 5;
+                        }
+                    }
+                }
+            }
+            
             onResize() {
                 this.camera.aspect = window.innerWidth / window.innerHeight;
                 this.camera.updateProjectionMatrix();
@@ -1098,6 +1243,8 @@
                     for (const marker of this.validMoveMarkers) {
                         marker.rotation.z += 0.02;
                     }
+                    // Update VR controllers
+                    this.updateVRControllers();
                     this.render();
                 });
             }
@@ -1134,6 +1281,9 @@
                     this.renderer.xr.setSession(session);
                     this.isXRSession = true;
                     
+                    // Setup VR controllers
+                    this.setupVRControllers();
+                    
                     // Adjust camera for VR
                     this.camera.position.set(0, 1.6, 2);
                     
@@ -1141,6 +1291,12 @@
                         this.isXRSession = false;
                         this.camera.position.set(0, 8, 8);
                         this.camera.lookAt(0, 0, 0);
+                        // Clean up controllers
+                        for (let i = 0; i < this.controllers.length; i++) {
+                            if (this.controllerGrips[i]) {
+                                this.scene.remove(this.controllerGrips[i]);
+                            }
+                        }
                     });
                     
                     return true;
@@ -1305,6 +1461,19 @@
                 }
             }
             
+            handleVRControllerClick(cell) {
+                if (!this.isPlaying || this.game.gameOver || this.isComputerThinking) return;
+                
+                // If it's computer's turn, don't allow clicks
+                if (this.game.vsComputer && this.game.currentPlayer === 2) return;
+                
+                if (!cell) return;
+                
+                if (this.game.isValidMove(cell.row, cell.col, this.game.currentPlayer)) {
+                    this.makeMove(cell.row, cell.col);
+                }
+            }
+            
             async makeMove(row, col) {
                 const isBlack = this.game.currentPlayer === 1;
                 const flipped = this.game.makeMove(row, col, this.game.currentPlayer);
@@ -1407,6 +1576,7 @@
 
         // Initialize app
         const app = new OthelloApp();
+        window.othelloApp = app; // Make app accessible for VR controller callbacks
     </script>
 </body>
 </html>
