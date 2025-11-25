@@ -841,6 +841,10 @@
             }
             
             createBoard() {
+                // Create board group for easy positioning
+                this.boardGroup = new THREE.Group();
+                this.scene.add(this.boardGroup);
+                
                 // Board base
                 const boardGeometry = new THREE.BoxGeometry(8.5, 0.3, 8.5);
                 const boardMaterial = new THREE.MeshStandardMaterial({
@@ -850,7 +854,7 @@
                 });
                 this.boardMesh = new THREE.Mesh(boardGeometry, boardMaterial);
                 this.boardMesh.position.y = -0.15;
-                this.scene.add(this.boardMesh);
+                this.boardGroup.add(this.boardMesh);
                 
                 // Board frame
                 const frameGeometry = new THREE.BoxGeometry(9, 0.4, 9);
@@ -861,7 +865,7 @@
                 });
                 const frame = new THREE.Mesh(frameGeometry, frameMaterial);
                 frame.position.y = -0.2;
-                this.scene.add(frame);
+                this.boardGroup.add(frame);
                 
                 // Grid lines
                 const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
@@ -876,7 +880,7 @@
                     ];
                     const hGeometry = new THREE.BufferGeometry().setFromPoints(hPoints);
                     const hLine = new THREE.Line(hGeometry, lineMaterial);
-                    this.scene.add(hLine);
+                    this.boardGroup.add(hLine);
                     
                     // Vertical lines
                     const vPoints = [
@@ -885,7 +889,7 @@
                     ];
                     const vGeometry = new THREE.BufferGeometry().setFromPoints(vPoints);
                     const vLine = new THREE.Line(vGeometry, lineMaterial);
-                    this.scene.add(vLine);
+                    this.boardGroup.add(vLine);
                 }
                 
                 // Cell meshes for raycasting
@@ -904,7 +908,7 @@
                         cell.position.set(col - 3.5, 0.02, row - 3.5);
                         cell.userData = { row, col };
                         this.cellMeshes.push(cell);
-                        this.scene.add(cell);
+                        this.boardGroup.add(cell);
                     }
                 }
             }
@@ -930,8 +934,7 @@
                             const disc = this.createDisc(cell === 1);
                             disc.position.set(col - 3.5, 0.1, row - 3.5);
                             this.discs.push(disc);
-                            this.scene.add(disc);
-                        }
+                            this.boardGroup.add(disc);
                     }
                 }
                 
@@ -942,7 +945,7 @@
                         const marker = this.createValidMoveMarker(game.currentPlayer === 1);
                         marker.position.set(move.col - 3.5, 0.02, move.row - 3.5);
                         this.validMoveMarkers.push(marker);
-                        this.scene.add(marker);
+                        this.boardGroup.add(marker);
                     }
                 }
             }
@@ -992,7 +995,7 @@
                 const disc = this.createDisc(isBlack);
                 disc.position.set(col - 3.5, 2, row - 3.5);
                 disc.scale.set(0.1, 0.1, 0.1);
-                this.scene.add(disc);
+                this.boardGroup.add(disc);
                 this.discs.push(disc);
                 
                 // Animate drop
@@ -1057,7 +1060,7 @@
                                 const newDisc = this.createDisc(toBlack);
                                 newDisc.position.set(x, 0.1 + Math.sin(progress * Math.PI) * 0.3, z);
                                 newDisc.rotation.x = (progress - 0.5) * Math.PI;
-                                this.scene.add(newDisc);
+                                this.boardGroup.add(newDisc);
                                 this.discs.push(newDisc);
                             }
                         }
@@ -1284,13 +1287,20 @@
                     // Setup VR controllers
                     this.setupVRControllers();
                     
-                    // Adjust camera for VR
-                    this.camera.position.set(0, 1.6, 2);
+                    // Move board in front of user (z = -3 means board is 3 units in front)
+                    // Board height adjusted for comfortable viewing (y = -0.5 means slightly below eye level)
+                    if (this.boardGroup) {
+                        this.boardGroup.position.set(0, -0.5, -3);
+                    }
                     
                     session.addEventListener('end', () => {
                         this.isXRSession = false;
                         this.camera.position.set(0, 8, 8);
                         this.camera.lookAt(0, 0, 0);
+                        // Reset board position
+                        if (this.boardGroup) {
+                            this.boardGroup.position.set(0, 0, 0);
+                        }
                         // Clean up controllers
                         for (let i = 0; i < this.controllers.length; i++) {
                             if (this.controllerGrips[i]) {
