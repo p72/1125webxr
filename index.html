@@ -943,7 +943,9 @@
                 if (!game.gameOver) {
                     const validMoves = game.getValidMoves(game.currentPlayer);
                     for (const move of validMoves) {
-                        const marker = this.createValidMoveMarker(game.currentPlayer === 1);
+                        // currentPlayer === 1 is black, so isBlack should be true
+                        const isBlack = game.currentPlayer === 1;
+                        const marker = this.createValidMoveMarker(isBlack);
                         marker.position.set(move.col - 3.5, 0.02, move.row - 3.5);
                         this.validMoveMarkers.push(marker);
                         this.boardGroup.add(marker);
@@ -982,6 +984,8 @@
             createValidMoveMarker(isBlack) {
                 const geometry = new THREE.RingGeometry(0.2, 0.3, 32);
                 const material = new THREE.MeshBasicMaterial({
+                    // isBlack = true (currentPlayer === 1, black) -> cyan (0x00f5ff)
+                    // isBlack = false (currentPlayer === 2, white) -> white (0xffffff)
                     color: isBlack ? 0x00f5ff : 0xffffff,
                     transparent: true,
                     opacity: 0.4,
