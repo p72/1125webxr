@@ -1367,32 +1367,42 @@
             }
             
             async setupUI() {
-                // Check XR support
-                const xrSupport = await this.renderer.checkXRSupport();
-                
-                const vrBtn = document.getElementById('vr-btn');
-                const arBtn = document.getElementById('ar-btn');
-                
-                if (xrSupport.vr) {
-                    vrBtn.disabled = false;
-                    vrBtn.addEventListener('click', () => this.startVR());
+                try {
+                    // Check XR support
+                    const xrSupport = await this.renderer.checkXRSupport();
+                    
+                    const vrBtn = document.getElementById('vr-btn');
+                    const arBtn = document.getElementById('ar-btn');
+                    
+                    if (xrSupport.vr && vrBtn) {
+                        vrBtn.disabled = false;
+                        vrBtn.addEventListener('click', () => this.startVR());
+                    }
+                    
+                    if (xrSupport.ar && arBtn) {
+                        arBtn.disabled = false;
+                        arBtn.addEventListener('click', () => this.startAR());
+                    }
+                    
+                    // Menu buttons
+                    const vsComBtn = document.getElementById('vs-com-btn');
+                    if (vsComBtn) {
+                        vsComBtn.addEventListener('click', () => {
+                            this.difficultySelect.style.display = 'block';
+                            this.startGame(true);
+                        });
+                    }
+                    
+                    const vsPlayerBtn = document.getElementById('vs-player-btn');
+                    if (vsPlayerBtn) {
+                        vsPlayerBtn.addEventListener('click', () => {
+                            this.difficultySelect.style.display = 'none';
+                            this.startGame(false);
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error setting up UI:', error);
                 }
-                
-                if (xrSupport.ar) {
-                    arBtn.disabled = false;
-                    arBtn.addEventListener('click', () => this.startAR());
-                }
-                
-                // Menu buttons
-                document.getElementById('vs-com-btn').addEventListener('click', () => {
-                    this.difficultySelect.style.display = 'block';
-                    this.startGame(true);
-                });
-                
-                document.getElementById('vs-player-btn').addEventListener('click', () => {
-                    this.difficultySelect.style.display = 'none';
-                    this.startGame(false);
-                });
                 
                 // Difficulty buttons
                 const diffBtns = document.querySelectorAll('.diff-btn');
