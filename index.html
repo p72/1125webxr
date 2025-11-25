@@ -798,6 +798,10 @@
                 this.controllerRays = [];
                 this.controllerCursors = [];
                 
+                // Board scale and position for VR
+                this.boardScale = 1.0;
+                this.boardBasePosition = { x: 0, y: -0.5, z: -3 };
+                
                 this.setupScene();
                 this.setupLights();
                 this.createBoard();
@@ -1121,6 +1125,8 @@
                 for (let i = 0; i < 2; i++) {
                     const controller = this.renderer.xr.getController(i);
                     controller.addEventListener('connected', (event) => {
+                        // Store input source reference for gamepad access
+                        controller.userData.inputSource = event.data;
                         const controllerGrip = this.renderer.xr.getControllerGrip(i);
                         if (controllerModelFactory) {
                             try {
@@ -1169,6 +1175,7 @@
                             controller.remove(this.controllerCursors[i]);
                             this.controllerCursors[i] = null;
                         }
+                        controller.userData.inputSource = null;
                     });
                     
                     // Handle trigger button
@@ -1176,8 +1183,27 @@
                         this.onControllerSelect(i);
                     });
                     
+                    // Handle grip button for board scale reset
+                    controller.addEventListener('squeezestart', () => {
+                        this.resetBoardScale();
+                    });
+                    
                     this.scene.add(controller);
                     this.controllers[i] = controller;
+                }
+            }
+            
+            resetBoardScale() {
+                this.boardScale = 1.0;
+                if (this.boardGroup) {
+                    this.boardGroup.scale.set(this.boardScale, this.boardScale, this.boardScale);
+                }
+            }
+            
+            adjustBoardScale(delta) {
+                this.boardScale = Math.max(0.5, Math.min(2.0, this.boardScale + delta));
+                if (this.boardGroup) {
+                    this.boardGroup.scale.set(this.boardScale, this.boardScale, this.boardScale);
                 }
             }
             
@@ -1217,6 +1243,23 @@
                     const controllerWorldDirection = new THREE.Vector3();
                     controller.getWorldPosition(controllerWorldPosition);
                     controller.getWorldDirection(controllerWorldDirection);
+                    
+                    // Handle thumbstick for board scale adjustment
+                    // Get gamepad from XR input source
+                    const inputSource = controller.userData.inputSource;
+                    if (inputSource && inputSource.gamepad) {
+                        const gamepad = inputSource.gamepad;
+                        if (gamepad.axes && gamepad.axes.length >= 4) {
+                            // Use thumbstick Y axis (up/down) to adjust board scale
+                            // axes[2] = thumbstick X, axes[3] = thumbstick Y
+                            const thumbstickY = gamepad.axes[3];
+                            if (Math.abs(thumbstickY) > 0.1) {
+                                // Scale adjustment: up = zoom in, down = zoom out
+                                const scaleDelta = -thumbstickY * 0.01; // Adjust sensitivity
+                                this.adjustBoardScale(scaleDelta);
+                            }
+                        }
+                    }
                     
                     // Raycast for cursor
                     this.raycaster.set(controllerWorldPosition, controllerWorldDirection);
@@ -1306,17 +1349,20 @@
                     // Move board in front of user (z = -3 means board is 3 units in front)
                     // Board height adjusted for comfortable viewing (y = -0.5 means slightly below eye level)
                     if (this.boardGroup) {
-                        this.boardGroup.position.set(0, -0.5, -3);
+                        this.boardGroup.position.set(this.boardBasePosition.x, this.boardBasePosition.y, this.boardBasePosition.z);
+                        this.boardGroup.scale.set(this.boardScale, this.boardScale, this.boardScale);
                     }
                     
                     session.addEventListener('end', () => {
                         this.isXRSession = false;
                         this.camera.position.set(0, 8, 8);
                         this.camera.lookAt(0, 0, 0);
-                        // Reset board position
+                        // Reset board position and scale
                         if (this.boardGroup) {
                             this.boardGroup.position.set(0, 0, 0);
+                            this.boardGroup.scale.set(1, 1, 1);
                         }
+                        this.boardScale = 1.0;
                         // Clean up controllers
                         for (let i = 0; i < this.controllers.length; i++) {
                             if (this.controllerGrips[i]) {
